@@ -30,8 +30,8 @@ import CourseResultFormModal from './CourseResultFormModal';
 import ConfirmationModal from './ConfirmationModal';
 import type { StudentResult, Servant, CourseResult, Evaluation } from './types';
 import type { CertificateTexts, CustomStyles } from './App';
-// التصحيح هنا: إزالة الأقواس {} لأن التصدير هو default
-import AIChatView from './AIChatView';
+// التصحيح هنا: استخدام الأقواس {} لأن التصدير هو named export
+import { AIChatView } from './AIChatView';
 import DetailsModal from './DetailsModal';
 import SettingsView from './SettingsView';
 
@@ -50,8 +50,6 @@ interface AdminViewProps {
   customStyles: CustomStyles;
 }
 
-// ... (باقي الكود كما هو تماماً دون تغيير)
-
 const AdminView: React.FC<AdminViewProps> = ({
   results,
   servants,
@@ -67,8 +65,25 @@ const AdminView: React.FC<AdminViewProps> = ({
   customStyles
 }) => {
   const [activeTab, setActiveTab] = useState<'results' | 'import' | 'import-eval' | 'settings' | 'stats' | 'data' | 'ai-chat'>('results');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedResult, setSelectedResult] = useState<CourseResult | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-  // ... (باقي الكود)
+  const handleDelete = async () => {
+    if (itemToDelete) {
+      try {
+        await deleteDoc(doc(db, 'courseResults', itemToDelete));
+        const updatedResults = courseResults.filter(r => r.id !== itemToDelete);
+        onUpdateCourseResults(updatedResults);
+        setItemToDelete(null);
+        setShowDeleteModal(false);
+      } catch (error) {
+        console.error('Error deleting document: ', error);
+        alert('حدث خطأ أثناء حذف النتيجة');
+      }
+    }
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -84,7 +99,7 @@ const AdminView: React.FC<AdminViewProps> = ({
         return (
           <ExcelImportView 
             onImport={(data) => {
-              // Handle import logic
+              // Handle import logic here
               console.log('Imported data:', data);
             }} 
           />
@@ -93,7 +108,7 @@ const AdminView: React.FC<AdminViewProps> = ({
         return (
           <ExcelImportEvaluationsView 
             onImport={(data) => {
-               // Handle evaluation import logic
+               // Handle evaluation import logic here
                console.log('Imported evaluations:', data);
             }}
           />
@@ -226,6 +241,41 @@ const AdminView: React.FC<AdminViewProps> = ({
           {renderContent()}
         </div>
       </div>
+
+      {/* Modals */}
+      {showAddModal && (
+        <CourseResultFormModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSubmit={async (data) => {
+            // Handle submit logic
+            setShowAddModal(false);
+          }}
+          initialData={undefined}
+          servants={servants}
+        />
+      )}
+
+      {selectedResult && (
+        <CourseResultFormModal
+          isOpen={true}
+          onClose={() => setSelectedResult(null)}
+          onSubmit={async (data) => {
+            // Handle update logic
+            setSelectedResult(null);
+          }}
+          initialData={selectedResult}
+          servants={servants}
+        />
+      )}
+
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDelete}
+        title="تأكيد الحذف"
+        message="هل أنت متأكد من حذف هذه النتيجة؟ لا يمكن التراجع عن هذا الإجراء."
+      />
     </div>
   );
 };
