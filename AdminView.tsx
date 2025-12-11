@@ -1,17 +1,14 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
-// تمت إزالة الاستيرادات غير المستخدمة لإصلاح الأخطاء
+// تم حذف استيراد lucide-react غير المستخدم لإزالة الأخطاء
 import type { StudentResult, Servant, CourseResult, Evaluation } from './types';
 import type { CertificateTexts, CustomStyles } from './App';
 import { AIChatView } from './AIChatView';
-import DetailsModal from './DetailsModal';
 import SettingsView from './SettingsView';
 import DataManagementView from './DataManagementView';
 import CourseResultsDataView from './CourseResultsDataView';
 import ExcelImportEvaluationsView from './ExcelImportEvaluationsView';
 import GeneralSettingsView from './GeneralSettingsView';
-import ConfirmationModal from './ConfirmationModal';
-import ServantProfileModal from './ServantProfileModal';
 import UsageStatsView from './UsageStatsView';
 
 // --- SVG Icons (Local Definitions) ---
@@ -126,8 +123,6 @@ const AdminView: React.FC<AdminViewProps> = ({
         }
         switch (activeTab) {
             case 'info': return (
-                // استخدام CourseResultsDataView كواجهة افتراضية للإحصائيات في هذه النسخة المبسطة
-                // يمكن استبدالها بـ Dashboard كاملة إذا كانت متوفرة
                 <CourseResultsDataView /> 
             );
             case 'ai_chat': return <AIChatView students={courseRegistrations} />;

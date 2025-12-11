@@ -32,12 +32,13 @@ export const handler = async (event, context) => {
     const body = JSON.parse(event.body || "{}");
     const prompt = body.contents || body.messages?.[0]?.content || "Hello";
     
-    console.log("📝 Processing Prompt using gemini-pro...");
+    // استخدام موديل 1.5-flash وهو المعتمد حالياً
+    const modelName = "gemini-1.5-flash"; 
+    
+    console.log(`📝 Processing Prompt using ${modelName}...`);
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // التغيير هنا: استخدام الموديل الأساسي المتاح للجميع
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -53,6 +54,27 @@ export const handler = async (event, context) => {
 
   } catch (error) {
     console.error("🔴 EXECUTION ERROR:", error);
+    
+    // محاولة ذكية: إذا فشل الموديل الحديث، نجرب الموديل القديم كخطة بديلة
+    if (error.message.includes("404") || error.message.includes("not found")) {
+         console.log("⚠️ gemini-1.5-flash failed (404). Retrying with gemini-pro...");
+         try {
+            const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+            const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+            const fallbackResult = await fallbackModel.generateContent(JSON.parse(event.body).contents || "Hello");
+            const fallbackText = fallbackResult.response.text();
+            
+            console.log("✅ Success with Fallback (gemini-pro)!");
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({ text: fallbackText, reply: fallbackText }),
+            };
+         } catch (fallbackError) {
+             console.error("🔴 Fallback also failed:", fallbackError);
+         }
+    }
+
     return {
       statusCode: 500,
       headers,
