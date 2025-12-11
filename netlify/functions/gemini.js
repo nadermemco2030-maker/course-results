@@ -1,57 +1,51 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const handler = async (event, context) => {
-  // 1. تسجيل بداية التشغيل (سيظهر هذا في السجل حتماً)
-  console.log("🚀 Function STARTED: Received request");
-  console.log("Method:", event.httpMethod);
-
-  // إعدادات CORS
+  // طباعة رسالة ترحيبية في السجل للتأكد من أن الدالة حية
+  console.log("🟢 Function Starting: Gemini Handler Invoked");
+  
+  // إعدادات الأمان (CORS)
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 
-  // التعامل مع Preflight
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers, body: "OK" };
   }
 
-  // التأكد من طريقة الطلب
   if (event.httpMethod !== "POST") {
-    console.error("❌ Method Not Allowed:", event.httpMethod);
+    console.log("🔴 Method Not Allowed:", event.httpMethod);
     return { statusCode: 405, headers, body: "Method Not Allowed" };
   }
 
   try {
-    // 2. التحقق من المفتاح
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
-      console.error("❌ CRITICAL: API_KEY is missing in Netlify Env Vars");
+      console.error("🔴 CRITICAL ERROR: API Key missing in Netlify Env");
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: "Server Error: API Key not configured" }),
+        body: JSON.stringify({ error: "Server Error: API configuration missing" }),
       };
     }
-    console.log("✅ API Key found (ends with):", apiKey.slice(-4));
 
-    // 3. قراءة البيانات
-    if (!event.body) throw new Error("Request body is empty");
-    const body = JSON.parse(event.body);
-    const prompt = body.contents || body.messages?.[0]?.content || "Hello";
+    const body = JSON.parse(event.body || "{}");
+    const prompt = body.contents || body.messages?.[0]?.content || "";
     
-    console.log("📝 Sending prompt to Google:", prompt.substring(0, 50) + "...");
+    console.log("📝 Processing Prompt:", prompt.substring(0, 30) + "...");
 
-    // 4. الاتصال بجوجل (باستخدام المكتبة المستقرة وموديل 1.5)
+    // استخدام المكتبة المستقرة (GenerativeAI) بدلاً من (GenAI)
     const genAI = new GoogleGenerativeAI(apiKey);
+    // نستخدم الموديل 1.5 لأنه الأكثر استقراراً وسرعة حالياً
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
 
-    console.log("✅ SUCCESS: Google responded. Text length:", text.length);
+    console.log("✅ Success! Generated response length:", text.length);
 
     return {
       statusCode: 200,
@@ -60,12 +54,12 @@ export const handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error("❌ ERROR inside function:", error);
+    console.error("🔴 EXECUTION ERROR:", error);
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
-        error: "Failed to generate content", 
+        error: "Failed to process request", 
         details: error.message 
       }),
     };
