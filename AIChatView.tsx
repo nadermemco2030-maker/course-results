@@ -1,15 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { StudentResult } from './types';
+import { Bot, User, Sparkles, Send, Loader2 } from 'lucide-react';
 
-// --- SVG Icons ---
-const SendIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transform -rotate-45" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>;
-const BotIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>;
-const UserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>;
-const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 9a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zm7-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7a1 1 0 10-2 0v1h-1z" clipRule="evenodd" /></svg>;
+// --- SVG Icons Fallback (in case lucide fails loading) ---
+// (We keep using Lucide imports above, but fallback logic isn't strictly needed if lucide is installed)
 
 interface AIChatViewProps {
-    students?: StudentResult[]; // Optional to prevent errors if not passed
-    onClose?: () => void; // Added to match usage in AdminView/App
+    students?: StudentResult[];
+    onClose?: () => void;
 }
 
 interface Message {
@@ -76,8 +74,6 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students = [] }) => {
         setIsLoading(true);
         
         try {
-            // تحضير السياق للذكاء الاصطناعي
-            // نرسل البيانات كجزء من النص لأن النموذج لا يحتفظ بذاكرة (Stateless)
             const dataContext = students.length > 0 ? `البيانات المتاحة: ${JSON.stringify(students.slice(0, 100))}` : "لا توجد بيانات طلاب متاحة حالياً.";
             
             const prompt = `
@@ -88,20 +84,23 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students = [] }) => {
             سؤال المستخدم: ${userMessage.text}
             `;
 
-            // إرسال الطلب بصيغة { contents: ... } ليتوافق مع gemini.js
-            const response = await fetch('/.netlify/functions/gemini', {
+            console.log("Sending request to /api/gemini..."); // Debug log
+
+            // استخدام المسار الجديد الذي قمنا بضبطه في netlify.toml
+            const response = await fetch('/api/gemini', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ contents: prompt }),
             });
 
-            const data = await response.json();
+            console.log("Response status:", response.status); // Debug log
 
             if (!response.ok) {
-                throw new Error(data.error || 'حدث خطأ في الخادم');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || errorData.details || `خطأ في الخادم: ${response.status}`);
             }
 
-            // استخراج النص من الرد (يدعم الصيغتين المحتملتين)
+            const data = await response.json();
             const text = data.text || data.reply || "عذراً، لم يصلني رد مفهوم.";
 
             setMessages(prev => [...prev, { sender: 'ai', text }]);
@@ -125,7 +124,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students = [] }) => {
             {/* Header */}
             <div className="bg-white dark:bg-slate-800 p-4 border-b border-gray-200 dark:border-slate-700 flex items-center gap-3 shadow-sm z-10">
                 <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-full">
-                    <SparklesIcon />
+                    <Sparkles className="w-5 h-5 text-indigo-500" />
                 </div>
                 <div>
                     <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">المساعد الذكي</h3>
@@ -138,7 +137,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students = [] }) => {
                 {messages.map((msg, index) => (
                      <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'} animate-fade-in-up`}>
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-100 dark:border-slate-700 ${msg.sender === 'ai' ? 'bg-white dark:bg-slate-800 text-indigo-600' : 'bg-indigo-600 text-white'}`}>
-                            {msg.sender === 'ai' ? <BotIcon/> : <UserIcon/>}
+                            {msg.sender === 'ai' ? <Bot className="w-6 h-6" /> : <User className="w-6 h-6" />}
                         </div>
                         
                         <div className={`px-5 py-3.5 rounded-2xl max-w-[85%] md:max-w-xl shadow-sm ${
@@ -158,7 +157,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students = [] }) => {
                 {isLoading && (
                     <div className="flex items-start gap-3 animate-pulse">
                         <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 text-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-200 dark:border-slate-700">
-                            <BotIcon/>
+                            <Bot className="w-6 h-6" />
                         </div>
                         <div className="px-5 py-4 rounded-2xl bg-white dark:bg-slate-800 rounded-tl-none shadow-sm border border-gray-200 dark:border-slate-700">
                             <div className="flex items-center gap-1.5">
@@ -205,7 +204,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students = [] }) => {
                         disabled={isLoading || !input.trim()} 
                         className="absolute left-2 top-1/2 transform -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed transition-all shadow-md flex items-center justify-center"
                     >
-                        {isLoading ? <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin"></div> : <SendIcon />}
+                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                     </button>
                 </form>
             </div>
