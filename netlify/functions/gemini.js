@@ -1,10 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const handler = async (event, context) => {
-  // طباعة رسالة ترحيبية في السجل للتأكد من أن الدالة حية
   console.log("🟢 Function Starting: Gemini Handler Invoked");
   
-  // إعدادات الأمان (CORS)
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -32,14 +30,14 @@ export const handler = async (event, context) => {
     }
 
     const body = JSON.parse(event.body || "{}");
-    const prompt = body.contents || body.messages?.[0]?.content || "";
+    const prompt = body.contents || body.messages?.[0]?.content || "Hello";
     
-    console.log("📝 Processing Prompt:", prompt.substring(0, 30) + "...");
+    console.log("📝 Processing Prompt using gemini-pro...");
 
-    // استخدام المكتبة المستقرة (GenerativeAI) بدلاً من (GenAI)
     const genAI = new GoogleGenerativeAI(apiKey);
-    // نستخدم الموديل 1.5 لأنه الأكثر استقراراً وسرعة حالياً
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    // التغيير هنا: استخدام الموديل الأساسي المتاح للجميع
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
