@@ -1,5 +1,5 @@
 {
-  "name": "course-results",
+  "name": "jesus-community-course-results",
   "private": true,
   "version": "1.24.0",
   "type": "module",
@@ -9,15 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.2.1",
-    "firebase": "^10.8.1",
-    "framer-motion": "^11.0.8",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^2.5.1",
-    "lucide-react": "^0.344.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "xlsx": "^0.18.5"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@google/generative-ai": "^0.12.0",
+    "firebase": "^10.12.2",
+    "xlsx": "^0.18.5",
+    "lucide-react": "^0.344.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
@@ -28,5 +25,9 @@
     "tailwindcss": "^3.4.4",
     "typescript": "^5.5.3",
     "vite": "^5.4.1"
+  },
+  "overrides": {
+    "react": "$react",
+    "react-dom": "$react-dom"
   }
 }

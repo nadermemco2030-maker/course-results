@@ -30,27 +30,38 @@ import CourseResultFormModal from './CourseResultFormModal';
 import ConfirmationModal from './ConfirmationModal';
 import type { StudentResult, Servant, CourseResult, Evaluation } from './types';
 import type { CertificateTexts, CustomStyles } from './App';
-// التصحيح هنا: استخدام الأقواس {} لأن التصدير هو named export
+// ✅ التصحيح الجوهري: استخدام الأقواس {} لأننا غيرنا التصدير في AIChatView
 import { AIChatView } from './AIChatView';
 import DetailsModal from './DetailsModal';
 import SettingsView from './SettingsView';
 
 interface AdminViewProps {
-  results: StudentResult[];
+  onLogout: () => void;
+  results?: StudentResult[];
   servants: Servant[];
   courseResults: CourseResult[];
   evaluations: Evaluation[];
-  onUpdateResults: (newResults: StudentResult[]) => void;
+  onUpdateResults?: (newResults: StudentResult[]) => void;
   onUpdateServants: (newServants: Servant[]) => void;
   onUpdateCourseResults: (newResults: CourseResult[]) => void;
   onUpdateEvaluations: (newEvaluations: Evaluation[]) => void;
   onUpdateCertificateTexts: (texts: CertificateTexts) => void;
   onUpdateCustomStyles: (styles: CustomStyles) => void;
   certificateTexts: CertificateTexts;
+  setCertificateTexts: React.Dispatch<React.SetStateAction<CertificateTexts>>;
   customStyles: CustomStyles;
+  setCustomStyles: React.Dispatch<React.SetStateAction<CustomStyles>>;
+  setTheme: (theme: string) => void;
+  isDarkMode: boolean;
+  setIsDarkMode: (isDark: boolean) => void;
+  setBackgroundUrl: (url: string) => void;
+  backgroundUrl: string;
+  backgroundGallery: string[];
+  setBackgroundGallery: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 const AdminView: React.FC<AdminViewProps> = ({
+  onLogout,
   results,
   servants,
   courseResults,
@@ -62,7 +73,16 @@ const AdminView: React.FC<AdminViewProps> = ({
   onUpdateCertificateTexts,
   onUpdateCustomStyles,
   certificateTexts,
-  customStyles
+  setCertificateTexts,
+  customStyles,
+  setCustomStyles,
+  setTheme,
+  isDarkMode,
+  setIsDarkMode,
+  setBackgroundUrl,
+  backgroundUrl,
+  backgroundGallery,
+  setBackgroundGallery
 }) => {
   const [activeTab, setActiveTab] = useState<'results' | 'import' | 'import-eval' | 'settings' | 'stats' | 'data' | 'ai-chat'>('results');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -74,8 +94,11 @@ const AdminView: React.FC<AdminViewProps> = ({
     if (itemToDelete) {
       try {
         await deleteDoc(doc(db, 'courseResults', itemToDelete));
-        const updatedResults = courseResults.filter(r => r.id !== itemToDelete);
-        onUpdateCourseResults(updatedResults);
+        // تحديث الحالة المحلية إذا لزم الأمر
+        if (onUpdateCourseResults) {
+            const updatedResults = courseResults.filter(r => r.id !== itemToDelete);
+            onUpdateCourseResults(updatedResults);
+        }
         setItemToDelete(null);
         setShowDeleteModal(false);
       } catch (error) {
@@ -92,14 +115,13 @@ const AdminView: React.FC<AdminViewProps> = ({
           <CourseResultsDataView 
             courseResults={courseResults}
             servants={servants}
-            onUpdateCourseResults={onUpdateCourseResults}
+            onUpdateCourseResults={onUpdateCourseResults || (() => {})}
           />
         );
       case 'import':
         return (
           <ExcelImportView 
             onImport={(data) => {
-              // Handle import logic here
               console.log('Imported data:', data);
             }} 
           />
@@ -108,37 +130,43 @@ const AdminView: React.FC<AdminViewProps> = ({
         return (
           <ExcelImportEvaluationsView 
             onImport={(data) => {
-               // Handle evaluation import logic here
                console.log('Imported evaluations:', data);
             }}
           />
         );
       case 'settings':
         return (
-          <SettingsView 
-             certificateTexts={certificateTexts}
-             onUpdateCertificateTexts={onUpdateCertificateTexts}
-             customStyles={customStyles}
-             onUpdateCustomStyles={onUpdateCustomStyles}
-          />
+           <GeneralSettingsView 
+              setTheme={setTheme}
+              isDarkMode={isDarkMode}
+              setIsDarkMode={setIsDarkMode}
+              customStyles={customStyles}
+              setCustomStyles={setCustomStyles}
+              setBackgroundUrl={setBackgroundUrl}
+              backgroundUrl={backgroundUrl}
+              backgroundGallery={backgroundGallery}
+              setBackgroundGallery={setBackgroundGallery}
+           />
         );
       case 'stats':
         return <UsageStatsView />;
       case 'data':
         return <DataManagementView />;
       case 'ai-chat':
-        return <AIChatView />;
+        // نمرر نتائج الطلاب للمساعد الذكي ليكون الرد مبنياً على البيانات
+        // نقوم بتحويل CourseResult إلى الشكل المطلوب إذا لزم الأمر، أو نمرر البيانات الخام
+        return <AIChatView students={results || []} />;
       default:
         return null;
     }
   };
 
   return (
-    <div className="flex h-screen bg-gray-50" dir="rtl">
+    <div className={`flex h-screen ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-gray-50 text-gray-800'}`} dir="rtl">
       {/* Sidebar */}
-      <div className="w-64 bg-white border-l border-gray-200 shadow-sm flex flex-col">
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="text-xl font-bold text-indigo-800 flex items-center gap-2">
+      <div className={`w-64 border-l shadow-sm flex flex-col ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+        <div className={`p-6 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
+          <h2 className={`text-xl font-bold flex items-center gap-2 ${isDarkMode ? 'text-indigo-400' : 'text-indigo-800'}`}>
             <Settings className="w-6 h-6" />
             لوحة التحكم
           </h2>
@@ -149,8 +177,8 @@ const AdminView: React.FC<AdminViewProps> = ({
             onClick={() => setActiveTab('results')}
             className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
               activeTab === 'results' 
-                ? 'bg-indigo-50 text-indigo-700 shadow-sm' 
-                : 'text-gray-600 hover:bg-gray-50'
+                ? (isDarkMode ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-50 text-indigo-700 shadow-sm')
+                : (isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-50')
             }`}
           >
             <Database className="w-5 h-5" />
@@ -161,8 +189,8 @@ const AdminView: React.FC<AdminViewProps> = ({
             onClick={() => setActiveTab('import')}
             className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
               activeTab === 'import' 
-                ? 'bg-indigo-50 text-indigo-700 shadow-sm' 
-                : 'text-gray-600 hover:bg-gray-50'
+                ? (isDarkMode ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-50 text-indigo-700 shadow-sm')
+                : (isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-50')
             }`}
           >
             <FileSpreadsheet className="w-5 h-5" />
@@ -173,21 +201,21 @@ const AdminView: React.FC<AdminViewProps> = ({
             onClick={() => setActiveTab('import-eval')}
             className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
               activeTab === 'import-eval' 
-                ? 'bg-indigo-50 text-indigo-700 shadow-sm' 
-                : 'text-gray-600 hover:bg-gray-50'
+                ? (isDarkMode ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-50 text-indigo-700 shadow-sm')
+                : (isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-50')
             }`}
           >
             <GraduationCap className="w-5 h-5" />
             <span className="font-medium">استيراد التقييمات</span>
           </button>
 
-          <div className="border-t border-gray-100 my-2 pt-2">
+          <div className={`border-t my-2 pt-2 ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
             <button
               onClick={() => setActiveTab('stats')}
               className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
                 activeTab === 'stats' 
-                  ? 'bg-indigo-50 text-indigo-700 shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? (isDarkMode ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-50 text-indigo-700 shadow-sm')
+                  : (isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-50')
               }`}
             >
               <BarChart className="w-5 h-5" />
@@ -198,8 +226,8 @@ const AdminView: React.FC<AdminViewProps> = ({
               onClick={() => setActiveTab('ai-chat')}
               className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
                 activeTab === 'ai-chat' 
-                  ? 'bg-indigo-50 text-indigo-700 shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? (isDarkMode ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-50 text-indigo-700 shadow-sm')
+                  : (isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-50')
               }`}
             >
               <Bot className="w-5 h-5" />
@@ -207,13 +235,13 @@ const AdminView: React.FC<AdminViewProps> = ({
             </button>
           </div>
 
-          <div className="border-t border-gray-100 my-2 pt-2">
+          <div className={`border-t my-2 pt-2 ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
             <button
               onClick={() => setActiveTab('settings')}
               className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
                 activeTab === 'settings' 
-                  ? 'bg-indigo-50 text-indigo-700 shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? (isDarkMode ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-50 text-indigo-700 shadow-sm')
+                  : (isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-50')
               }`}
             >
               <Settings className="w-5 h-5" />
@@ -224,19 +252,28 @@ const AdminView: React.FC<AdminViewProps> = ({
               onClick={() => setActiveTab('data')}
               className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
                 activeTab === 'data' 
-                  ? 'bg-red-50 text-red-700 shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? (isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700 shadow-sm')
+                  : (isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-50')
               }`}
             >
               <Database className="w-5 h-5" />
               <span className="font-medium">إدارة البيانات</span>
             </button>
           </div>
+
+          <div className={`mt-auto pt-4 border-t ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
+             <button 
+               onClick={onLogout} 
+               className="w-full text-center p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
+             >
+               تسجيل الخروج
+             </button>
+          </div>
         </nav>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto p-8">
+      <div className={`flex-1 overflow-auto p-8 ${isDarkMode ? 'bg-slate-900' : 'bg-gray-50'}`}>
         <div className="max-w-7xl mx-auto">
           {renderContent()}
         </div>
@@ -248,7 +285,6 @@ const AdminView: React.FC<AdminViewProps> = ({
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onSubmit={async (data) => {
-            // Handle submit logic
             setShowAddModal(false);
           }}
           initialData={undefined}
@@ -261,7 +297,6 @@ const AdminView: React.FC<AdminViewProps> = ({
           isOpen={true}
           onClose={() => setSelectedResult(null)}
           onSubmit={async (data) => {
-            // Handle update logic
             setSelectedResult(null);
           }}
           initialData={selectedResult}
