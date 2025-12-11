@@ -1,59 +1,78 @@
-// هذه الدالة تعمل على خوادم Netlify (بأمان) وليس في المتصفح
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export const handler = async (event) => {
-  // 1. السماح فقط بطلبات POST
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
-  }
+export const handler = async (event, context) => {
+  // تفعيل CORS للسماح بالطلبات من المتصفح
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
 
-  // 2. جلب المفتاح السري بأمان بالاسم الصحيح
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.error('API_KEY is not set.');
+  // التعامل مع طلبات Preflight (OPTIONS)
+  if (event.httpMethod === "OPTIONS") {
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error: API key not configured.' }),
+      statusCode: 200,
+      headers,
+      body: "",
     };
   }
 
-  // 3. قراءة "محتوى" الطلب القادم من المتصفح
-  let requestBody;
-  try {
-    requestBody = JSON.parse(event.body);
-  } catch (e) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Bad request: Invalid JSON.' }) };
+  // التأكد من أن الطلب هو POST
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: "Method Not Allowed" }),
+    };
   }
 
-  const promptContents = requestBody.contents;
-  if (!promptContents) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Bad request: "contents" are required.' }) };
-  }
-  
   try {
-    // 4. استخدام حزمة جوجل الرسمية للاتصال
-    const ai = new GoogleGenAI({ apiKey });
-    
-    // استدعاء النموذج
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: promptContents,
-    });
+    const apiKey = process.env.API_KEY;
 
-    // استخلاص النص من الرد المبسط
-    const text = response.text;
+    if (!apiKey) {
+      console.error("API Key is missing in environment variables");
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: "Configuration Error: API Key is missing on server." }),
+      };
+    }
 
-    // 5. إرسال رد مبسط يحتوي على النص فقط إلى المتصفح
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    // التأكد من وجود البيانات في الطلب
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: "Request body is empty" }),
+      };
+    }
+
+    const data = JSON.parse(event.body);
+    const prompt = data.messages?.[0]?.content || "Hello";
+
+    // إرسال الطلب إلى Google Gemini
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ text }),
+      headers,
+      body: JSON.stringify({ reply: text }),
     };
 
   } catch (error) {
-    console.error('Error in Netlify function with SDK:', error);
+    console.error("Error in gemini function:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error while calling Gemini.' }),
+      headers,
+      body: JSON.stringify({ 
+        error: "Failed to generate content", 
+        details: error.message 
+      }),
     };
   }
 };
