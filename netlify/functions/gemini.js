@@ -32,54 +32,46 @@ export const handler = async (event, context) => {
     const body = JSON.parse(event.body || "{}");
     const prompt = body.contents || body.messages?.[0]?.content || "Hello";
     
-    // المحاولة الأولى: استخدام gemini-pro (الأكثر توافقاً)
-    let modelName = "gemini-pro"; 
-    
-    console.log(`📝 Processing Prompt using ${modelName}...`);
-
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: modelName });
+    
+    // قائمة الموديلات التي سنحاول استخدامها بالترتيب
+    // List of models to try in order of preference
+    const modelsToTry = ["gemini-1.5-flash", "gemini-pro", "gemini-1.5-pro"];
+    
+    let generatedText = null;
+    let lastError = null;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    for (const modelName of modelsToTry) {
+        try {
+            console.log(`📝 Attempting to generate content using model: ${modelName}...`);
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            generatedText = response.text();
+            
+            console.log(`✅ Success! Generated response using ${modelName}. Length: ${generatedText.length}`);
+            break; // Stop loop if successful
+        } catch (error) {
+            console.warn(`⚠️ Failed with ${modelName}:`, error.message.split('\n')[0]); // Log brief error
+            lastError = error;
+            // Continue to next model
+        }
+    }
 
-    console.log("✅ Success! Generated response length:", text.length);
+    if (!generatedText) {
+        console.error("🔴 All models failed. Last error:", lastError);
+        throw lastError || new Error("Failed to generate content with any available model.");
+    }
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ text: text, reply: text }),
+      body: JSON.stringify({ text: generatedText, reply: generatedText }),
     };
 
   } catch (error) {
-    console.error("🔴 EXECUTION ERROR:", error);
+    console.error("🔴 FINAL EXECUTION ERROR:", error);
     
-    // محاولة ثانية: إذا فشل gemini-pro، نجرب gemini-1.5-flash
-    if (error.message.includes("404") || error.message.includes("not found")) {
-         console.log("⚠️ gemini-pro failed (404). Retrying with gemini-1.5-flash...");
-         try {
-            const genAI = new GoogleGenerativeAI(process.env.API_KEY);
-            const fallbackModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-            const fallbackResult = await fallbackModel.generateContent(JSON.parse(event.body).contents || "Hello");
-            const fallbackText = fallbackResult.response.text();
-            
-            console.log("✅ Success with Fallback (gemini-1.5-flash)!");
-            return {
-                statusCode: 200,
-                headers,
-                body: JSON.stringify({ text: fallbackText, reply: fallbackText }),
-            };
-         } catch (fallbackError) {
-             console.error("🔴 Fallback also failed:", fallbackError);
-             
-             // محاولة أخيرة: طباعة الموديلات المتاحة لمعرفة المشكلة (للتشخيص)
-             // ملاحظة: هذا يتطلب صلاحيات إضافية للمفتاح، لكن سنحاول
-             console.log("🔍 Attempting to list available models for diagnosis...");
-             // (Code to list models is complex in edge functions, so we rely on logs)
-         }
-    }
-
     return {
       statusCode: 500,
       headers,
