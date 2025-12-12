@@ -1,33 +1,29 @@
 {
   "name": "jesus-community-course-results",
   "private": true,
-  "version": "1.24.0",
+  "version": "0.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nadernero/course-results.git"
+  },
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "netlify dev",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@google/generative-ai": "^0.12.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@google/genai": "^1.23.0",
     "firebase": "^10.12.2",
-    "xlsx": "^0.18.5",
-    "lucide-react": "^0.344.0"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "autoprefixer": "^10.4.19",
-    "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.4",
-    "typescript": "^5.5.3",
-    "vite": "^5.4.1"
-  },
-  "overrides": {
-    "react": "$react",
-    "react-dom": "$react-dom"
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "~5.8.2",
+    "vite": "^5.3.1",
+    "firebase-admin": "^12.1.1"
   }
 }

@@ -1,82 +1,57 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
-export const handler = async (event, context) => {
-  console.log("🟢 Function Starting: Gemini Handler Invoked");
-  
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
-
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 200, headers, body: "OK" };
+export const handler = async (event) => {
+  // 1. السماح فقط بطلبات POST
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  if (event.httpMethod !== "POST") {
-    console.log("🔴 Method Not Allowed:", event.httpMethod);
-    return { statusCode: 405, headers, body: "Method Not Allowed" };
+  // 2. التحقق من وجود المفتاح
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.error('API_KEY is not set.');
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Internal server error: API key not configured.' }),
+    };
   }
 
   try {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      console.error("🔴 CRITICAL ERROR: API Key missing in Netlify Env");
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: "Server Error: API configuration missing" }),
-      };
+    // 3. قراءة البيانات القادمة من الواجهة الأمامية
+    const requestBody = JSON.parse(event.body);
+    const promptContents = requestBody.contents;
+
+    if (!promptContents) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Bad request: "contents" are required.' }) };
     }
 
-    const body = JSON.parse(event.body || "{}");
-    const prompt = body.contents || body.messages?.[0]?.content || "Hello";
-    
-    const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // قائمة الموديلات التي سنحاول استخدامها بالترتيب
-    // List of models to try in order of preference
-    const modelsToTry = ["gemini-1.5-flash", "gemini-pro", "gemini-1.5-pro"];
-    
-    let generatedText = null;
-    let lastError = null;
+    // 4. إعداد العميل باستخدام المكتبة الجديدة
+    const ai = new GoogleGenAI({ apiKey });
 
-    for (const modelName of modelsToTry) {
-        try {
-            console.log(`📝 Attempting to generate content using model: ${modelName}...`);
-            const model = genAI.getGenerativeModel({ model: modelName });
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            generatedText = response.text();
-            
-            console.log(`✅ Success! Generated response using ${modelName}. Length: ${generatedText.length}`);
-            break; // Stop loop if successful
-        } catch (error) {
-            console.warn(`⚠️ Failed with ${modelName}:`, error.message.split('\n')[0]); // Log brief error
-            lastError = error;
-            // Continue to next model
-        }
-    }
+    // 5. استدعاء النموذج الحديث (Flash 2.5)
+    // هذا هو التعديل الأهم لإصلاح خطأ 404
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: promptContents,
+    });
 
-    if (!generatedText) {
-        console.error("🔴 All models failed. Last error:", lastError);
-        throw lastError || new Error("Failed to generate content with any available model.");
-    }
-
+    // 6. إرجاع النتيجة
+    const text = response.text;
+    
     return {
       statusCode: 200,
-      headers,
-      body: JSON.stringify({ text: generatedText, reply: generatedText }),
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ text }),
     };
 
   } catch (error) {
-    console.error("🔴 FINAL EXECUTION ERROR:", error);
-    
+    console.error('Gemini API Error:', error);
     return {
       statusCode: 500,
-      headers,
       body: JSON.stringify({ 
-        error: "Failed to process request", 
+        error: 'Failed to generate content.', 
         details: error.message 
       }),
     };
