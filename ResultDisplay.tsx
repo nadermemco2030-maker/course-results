@@ -132,7 +132,7 @@ const CourseResultCard: React.FC<{
       <div className="grid grid-cols-2 gap-4 items-center my-6">
         {/* Attendance (Right in RTL) */}
         <div className="text-center">
-          <p className="text-slate-200 font-semibold text-base">الحاضر</p>
+          <p className="text-slate-200 font-semibold text-base">نسبة الحضور </p>
           <p className="text-white font-bold text-3xl mt-1">{attendance}%</p>
           <div className="w-full bg-gray-200/20 rounded-full h-2.5 mt-2">
             <div className={`${bgColor} h-2.5 rounded-full`} style={{ width: `${attendance}%` }}></div>
