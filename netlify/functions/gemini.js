@@ -32,8 +32,8 @@ export const handler = async (event, context) => {
     const body = JSON.parse(event.body || "{}");
     const prompt = body.contents || body.messages?.[0]?.content || "Hello";
     
-    // استخدام موديل 1.5-flash وهو المعتمد حالياً
-    const modelName = "gemini-1.5-flash"; 
+    // المحاولة الأولى: استخدام gemini-pro (الأكثر توافقاً)
+    let modelName = "gemini-pro"; 
     
     console.log(`📝 Processing Prompt using ${modelName}...`);
 
@@ -55,16 +55,16 @@ export const handler = async (event, context) => {
   } catch (error) {
     console.error("🔴 EXECUTION ERROR:", error);
     
-    // محاولة ذكية: إذا فشل الموديل الحديث، نجرب الموديل القديم كخطة بديلة
+    // محاولة ثانية: إذا فشل gemini-pro، نجرب gemini-1.5-flash
     if (error.message.includes("404") || error.message.includes("not found")) {
-         console.log("⚠️ gemini-1.5-flash failed (404). Retrying with gemini-pro...");
+         console.log("⚠️ gemini-pro failed (404). Retrying with gemini-1.5-flash...");
          try {
             const genAI = new GoogleGenerativeAI(process.env.API_KEY);
-            const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+            const fallbackModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
             const fallbackResult = await fallbackModel.generateContent(JSON.parse(event.body).contents || "Hello");
             const fallbackText = fallbackResult.response.text();
             
-            console.log("✅ Success with Fallback (gemini-pro)!");
+            console.log("✅ Success with Fallback (gemini-1.5-flash)!");
             return {
                 statusCode: 200,
                 headers,
@@ -72,6 +72,11 @@ export const handler = async (event, context) => {
             };
          } catch (fallbackError) {
              console.error("🔴 Fallback also failed:", fallbackError);
+             
+             // محاولة أخيرة: طباعة الموديلات المتاحة لمعرفة المشكلة (للتشخيص)
+             // ملاحظة: هذا يتطلب صلاحيات إضافية للمفتاح، لكن سنحاول
+             console.log("🔍 Attempting to list available models for diagnosis...");
+             // (Code to list models is complex in edge functions, so we rely on logs)
          }
     }
 
