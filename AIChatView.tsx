@@ -64,9 +64,19 @@ const parseBold = (text: string) => {
     return safeText.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-indigo-900 dark:text-indigo-100">$1</strong>');
 };
 
+// Helper function to normalize Arabic text for better matching
+const normalizeArabic = (text: string) => {
+    return text
+        .replace(/(أ|إ|آ)/g, 'ا')
+        .replace(/(ة)/g, 'ه')
+        .replace(/(ى)/g, 'ي')
+        .trim()
+        .toLowerCase();
+};
+
 export const AIChatView: React.FC<AIChatViewProps> = ({ students, servants, results, evaluations }) => {
     const [messages, setMessages] = useState<Message[]>([
-        { sender: 'ai', text: 'أهلاً بك يا خادم الرب! ✝️\nأنا مساعدك الذكي لتحليل بيانات الخدمة.\n\nيمكنك سؤالي عن خادم محدد بالاسم، وسأقوم بجلب سجله الكامل وتحليله، بما في ذلك:\n- **نتائج الكورسات والحضور**\n- **تقييمات الخدمة التفصيلية**\n- **تحليل نقاط القوة والضعف**\n- **توصيات عملية**\n\nأو اسألني عن إحصائيات عامة للخدمة.' }
+        { sender: 'ai', text: 'أهلاً بك يا خادم الرب! ✝️\nأنا مساعدك الذكي لتحليل بيانات الخدمة.\n\nيمكنك سؤالي عن خادم محدد بالاسم (مثال: "معلومات عن جورج دانيال")، وسأقوم بجلب سجله الكامل وتحليله، بما في ذلك:\n- **البيانات الشخصية والخدمات**\n- **نتائج الكورسات ونسب الحضور**\n- **تحليل نقاط القوة والضعف**\n- **توصيات للأمين وتنبيهات**\n\nكيف يمكنني مساعدتك اليوم؟' }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -76,18 +86,6 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students, servants, resu
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isLoading]);
-
-    // Optimize Search: Index servants by name for fast lookup
-    const servantNameIndex = useMemo(() => {
-        const index: Record<string, Servant> = {};
-        servants.forEach(s => {
-            const normalizedName = s.name.toLowerCase().trim();
-            index[normalizedName] = s;
-            // Also index parts of the name for partial matching? Maybe too risky for privacy without explicit intent.
-            // Let's stick to simple includes check in the handler.
-        });
-        return index;
-    }, [servants]);
 
     const handleSendMessage = async (e?: React.FormEvent, customInput?: string) => {
         if (e) e.preventDefault();
@@ -101,65 +99,103 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students, servants, resu
         setIsLoading(true);
         
         try {
-            // 1. Determine Intent: Specific Servant or General?
-            // Simple heuristic: Does the input contain a known servant name?
-            const normalizedInput = textToSend.toLowerCase();
-            const matchedServants = servants.filter(s => normalizedInput.includes(s.name.toLowerCase().split(' ')[0])); // Match at least first name
+            // 1. Clean Input: Remove common stop words to find the name
+            // Remove "معلومات عن", "اريد", "تحليل", etc. to isolate the potential name
+            const stopWords = ['اريد', 'معلومات', 'عن', 'الخادم', 'تحليل', 'اداء', 'بيانات', 'نتيجة', 'درجات', 'ابحث', 'هات'];
+            let potentialName = textToSend;
+            stopWords.forEach(word => {
+                potentialName = potentialName.replace(new RegExp(word, 'gi'), '');
+            });
+            potentialName = normalizeArabic(potentialName);
+
+            // 2. Search Logic: Does the servant name include the input?
+            const matchedServants = servants.filter(s => {
+                const normalizedServantName = normalizeArabic(s.name);
+                return normalizedServantName.includes(potentialName) && potentialName.length > 2; // Ensure at least 3 chars
+            });
             
             let dataContext = "";
             let promptInstruction = "";
 
             if (matchedServants.length > 0) {
                 // --- Specific Servant Context ---
-                // Pick the best match (e.g., longest name match or first found)
-                // For simplicity, we take the first few matches (in case of "Peter")
-                const selectedServantsData = matchedServants.slice(0, 3).map(servant => {
+                // Take the top matches (limit to 2 to avoid token overflow)
+                const selectedServantsData = matchedServants.slice(0, 2).map(servant => {
                     const servantResults = results.filter(r => String(r.servantCode) === servant.code).sort((a,b) => b.year - a.year);
                     const servantEvaluations = evaluations.filter(ev => String(ev.servantCode) === servant.code).sort((a,b) => b.year - a.year);
                     
                     return {
-                        profile: servant,
-                        courses: servantResults,
+                        personalInfo: {
+                            name: servant.name,
+                            code: servant.code,
+                            mobile: servant.mobileNumber,
+                            services: servant.allServices || [servant.primaryService]
+                        },
+                        courses: servantResults.map(r => ({
+                            courseName: r.courseName,
+                            score: r.score,
+                            attendance: r.attendance,
+                            year: r.year
+                        })),
                         evaluations: servantEvaluations
                     };
                 });
 
                 dataContext = JSON.stringify(selectedServantsData);
                 promptInstruction = `
-                لقد سأل المستخدم عن خادم (أو خدام) محددين. البيانات المرفقة تحتوي على السجل الكامل لهم.
-                
-                **المطلوب منك كخبير تحليل:**
-                لكل خادم تم العثور عليه، قدم تقريراً مفصلاً يحتوي على الأقسام التالية بوضوح:
-                
-                1. **ملخص الكورسات:** اذكر الكورسات التي حضرها، درجاته، ونسب الحضور. هل هو ملتزم؟
-                2. **تحليل التقييمات:** انظر إلى درجات التقييم (Evaluations) عبر السنين. هل يتحسن؟ ما هي "المحاور" (مثل التحضير، الالتزام، العلاقة بالآخرين) التي حصل فيها على درجات منخفضة؟ وما هي نقاط قوته؟
-                3. **توصيات للخادم:** نصائح عملية ومحددة له لتحسين خدمته وحياته الروحية بناءً على نقاط ضعفه.
-                4. **توصيات للأمين:** نصائح للمسؤول عنه (كيف يتابعه، ماذا يحتاج منه).
-                5. **رسالة تشجيعية:** رسالة قصيرة دافئة موجهة للخادم باسمه.
+                لقد طلب المستخدم معلومات عن خادم (أو خدام) معينين.
+                البيانات المرفقة تحتوي على الملف الكامل لهم.
 
-                استخدم التنسيق الجميل (العناوين، النقاط، الإيموجي) لتسهيل القراءة.
+                **مهم جداً: قم بتقمص دور "محلل بيانات الخدمة" وقدم تقريراً احترافياً وشاملاً لكل خادم تم العثور عليه، وفق الهيكل التالي:**
+
+                1. **بطاقة تعريف الخادم:**
+                   - الاسم: [الاسم]
+                   - الكود: [الكود] | الموبايل: [رقم الموبايل]
+                   - الخدمات: [قائمة الخدمات]
+
+                2. **سجل الكورسات (تحليل الأداء):**
+                   - اسرد الكورسات التي حضرها مع الدرجة ونسبة الحضور.
+                   - هل درجاته في تحسن أم تراجع؟
+                   - هل نسبة الحضور منتظمة؟
+
+                3. **نقاط القوة والضعف (استنتاج من البيانات):**
+                   - **نقاط القوة:** (مثلاً: درجات مرتفعة، التزام بالحضور، تنوع الكورسات).
+                   - **نقاط الضعف:** (مثلاً: غياب متكرر في كورس معين، درجات منخفضة، انقطاع لفترة).
+
+                4. **التوصيات والملاحظات:**
+                   - **للخادم:** نصيحة محددة للتحسن بناءً على أدائه.
+                   - **للأمين (المسؤول):** تنبيه إذا كان الخادم يحتاج لمتابعة خاصة أو افتقاد بسبب الغياب، أو تشجيع لتكليفه بمسؤوليات أكبر إذا كان متميزاً.
+
+                استخدم الإيموجي وتنسيق النقاط (Bullet Points) لجعل القراءة سهلة وممتعة.
                 `;
 
             } else {
                 // --- General Context ---
-                // Send summarized data (StudentResults) to save tokens
-                dataContext = JSON.stringify(students.slice(0, 200)); 
+                // If no specific name found, fall back to general stats or answering the general question
+                const summaryStats = {
+                    totalServants: servants.length,
+                    topCourses: [...new Set(results.map(r => r.courseName))].slice(0, 5),
+                    sampleResults: students.slice(0, 50) // Send a sample
+                };
+                dataContext = JSON.stringify(summaryStats); 
                 promptInstruction = `
-                المستخدم يسأل سؤالاً عاماً عن الخدمة أو الإحصائيات.
-                البيانات المرفقة هي قائمة مختصرة للنتائج.
-                أجب بدقة بناءً على الأرقام المتاحة.
+                لم يتم العثور على خادم يطابق الاسم الذي أدخله المستخدم في البحث بدقة.
+                أخبر المستخدم بلطف أنك لم تجد خادماً بهذا الاسم بالتحديد، واقترح عليه التأكد من كتابة الاسم بشكل صحيح أو كتابة الكود.
+                
+                ومع ذلك، إذا كان سؤاله عاماً (عن إحصائيات أو عدد الخدام)، فأجب بناءً على البيانات العامة المرفقة.
                 `;
             }
 
             const systemInstruction = `
             أنت "المساعد الذكي" لخدمة مجتمع يسوع في كنيسة القديس بولس بالعبور.
-            دورك هو مساعدة أمناء الخدمة في متابعة الخدام وتحليل أدائهم الروحي والخدمي.
             
-            البيانات: ${dataContext}
+            البيانات المستخرجة من قاعدة البيانات:
+            ${dataContext}
             
+            تعليمات الاستجابة:
             ${promptInstruction}
             
-            سؤال المستخدم: ${userMessage.text}
+            سؤال المستخدم الأصلي: ${userMessage.text}
             `;
             
             const response = await fetch('/.netlify/functions/gemini', {
@@ -186,8 +222,8 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students, servants, resu
     };
     
     const suggestedPrompts = [
+        "تحليل شامل للخادم جورج دانيال",
         "من هم أعلى 5 خدام في الدرجات؟ 🏆",
-        "تحليل لأداء الخادم [اكتب الاسم] 🧐",
         "أعطني قائمة بالخدام الغائبين ⚠️",
         "ما هي التوصيات العامة لتحسين الخدمة؟ 💡",
     ];
@@ -238,7 +274,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students, servants, resu
                                 <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
                                 <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
                             </div>
-                            <p className="text-xs text-slate-400 mt-2">جاري تحليل البيانات...</p>
+                            <p className="text-xs text-slate-400 mt-2">جاري البحث في السجلات وتحليل البيانات...</p>
                         </div>
                     </div>
                 )}
@@ -285,3 +321,4 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students, servants, resu
         </div>
     );
 };
+
